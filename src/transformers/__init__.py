@@ -31,6 +31,7 @@ from .configuration_openai import OPENAI_GPT_PRETRAINED_CONFIG_ARCHIVE_MAP, Open
 from .configuration_roberta import ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP, RobertaConfig
 from .configuration_t5 import T5_PRETRAINED_CONFIG_ARCHIVE_MAP, T5Config
 from .configuration_transfo_xl import TRANSFO_XL_PRETRAINED_CONFIG_ARCHIVE_MAP, TransfoXLConfig
+from .configuration_dombert import DOMBERT_PRETRAINED_CONFIG_ARCHIVE_MAP, DomBertConfig
 
 # Configurations
 from .configuration_utils import PretrainedConfig
@@ -153,6 +154,14 @@ if is_torch_available():
         load_tf_weights_in_bert,
         BERT_PRETRAINED_MODEL_ARCHIVE_MAP,
     )
+
+    from .modeling_dombert import (
+        DomBertPreTrainedModel,
+        DomBertModel,
+        DomBertForSequenceClassification,
+        DomBertForTokenClassification
+    )
+
     from .modeling_openai import (
         OpenAIGPTPreTrainedModel,
         OpenAIGPTModel,

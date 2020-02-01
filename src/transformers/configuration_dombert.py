@@ -23,7 +23,7 @@ from .configuration_utils import PretrainedConfig
 
 logger = logging.getLogger(__name__)
 
-BERT_PRETRAINED_CONFIG_ARCHIVE_MAP = {
+DOMBERT_PRETRAINED_CONFIG_ARCHIVE_MAP = {
     "bert-base-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-config.json",
     "bert-large-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-config.json",
     "bert-base-cased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-config.json",
@@ -106,7 +106,7 @@ class DomBertConfig(PretrainedConfig):
             pretrained_config_archive_map (Dict[str, str]):
                 A dictionary containing all the available pre-trained checkpoints.
     """
-    pretrained_config_archive_map = BERT_PRETRAINED_CONFIG_ARCHIVE_MAP
+    pretrained_config_archive_map = DOMBERT_PRETRAINED_CONFIG_ARCHIVE_MAP
     model_type = "bert"
 
     def __init__(

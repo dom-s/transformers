@@ -33,8 +33,8 @@ from .modeling_utils import PreTrainedModel, prune_linear_layer
 
 logger = logging.getLogger(__name__)
 
-BERT_PRETRAINED_MODEL_ARCHIVE_MAP = {
-    "bert-base-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-pytorch_model.bin",
+DOMBERT_PRETRAINED_MODEL_ARCHIVE_MAP = {
+        "bert-base-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-pytorch_model.bin",
     "bert-large-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-pytorch_model.bin",
     "bert-base-cased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-pytorch_model.bin",
     "bert-large-cased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased-pytorch_model.bin",
@@ -163,20 +163,25 @@ class DomBertEmbeddings(nn.Module):
         self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=0)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
-        wv = gensim.models.KeyedVectors.load_word2vec_format(config.domain_embedding_path, binary=True)
-        domain_embedding_hidden_size = wv.vectors.shape[1]
-        wv.add(['[CLS]', '[SEP]', '[UNK]'], [np.zeros(domain_embedding_hidden_size),
-                                    np.zeros(domain_embedding_hidden_size),
-                                    np.zeros(domain_embedding_hidden_size)])
-        self.domain_embeddings = nn.Embedding.from_pretrained(torch.FloatTensor(wv.vectors), freeze=True)
-        self.W = nn.Linear(self.domain_embeddings.embedding_dim, self.word_embeddings.embedding_dim,
-                           bias=False)
+
+        self.domain_embeddings = None
+        self.W = None
         self._lambda = config.lambda_parameter
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def init_domain_embeddings(self, domain_embedding_path):
+        wv = gensim.models.KeyedVectors.load_word2vec_format(domain_embedding_path, binary=True)
+        domain_embedding_hidden_size = wv.vectors.shape[1]
+        wv.add(['[CLS]', '[SEP]', '[UNK]'], [np.zeros(domain_embedding_hidden_size),
+                                             np.zeros(domain_embedding_hidden_size),
+                                             np.zeros(domain_embedding_hidden_size)])
+        self.domain_embeddings = nn.Embedding.from_pretrained(torch.FloatTensor(wv.vectors), freeze=True)
+        self.W = nn.Linear(self.domain_embeddings.embedding_dim, self.word_embeddings.embedding_dim,
+                           bias=False)
 
     def forward(self, input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None, domain_input_ids=None):
         if input_ids is not None:
@@ -539,7 +544,7 @@ class DomBertPreTrainedModel(PreTrainedModel):
     """
 
     config_class = DomBertConfig
-    pretrained_model_archive_map = BERT_PRETRAINED_MODEL_ARCHIVE_MAP
+    pretrained_model_archive_map = DOMBERT_PRETRAINED_MODEL_ARCHIVE_MAP
     load_tf_weights = load_tf_weights_in_bert
     base_model_prefix = "dombert"
 

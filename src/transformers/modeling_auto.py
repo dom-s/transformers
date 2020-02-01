@@ -33,6 +33,7 @@ from .configuration_auto import (
     XLMConfig,
     XLMRobertaConfig,
     XLNetConfig,
+    DomBertConfig,
 )
 from .configuration_utils import PretrainedConfig
 from .modeling_albert import (
@@ -49,6 +50,13 @@ from .modeling_bert import (
     BertForSequenceClassification,
     BertForTokenClassification,
     BertModel,
+)
+
+from .modeling_dombert import (
+    DOMBERT_PRETRAINED_MODEL_ARCHIVE_MAP,
+    DomBertForTokenClassification,
+    DomBertForSequenceClassification,
+    DomBertModel,
 )
 from .modeling_camembert import (
     CAMEMBERT_PRETRAINED_MODEL_ARCHIVE_MAP,
@@ -120,6 +128,7 @@ ALL_PRETRAINED_MODEL_ARCHIVE_MAP = dict(
         CAMEMBERT_PRETRAINED_MODEL_ARCHIVE_MAP,
         T5_PRETRAINED_MODEL_ARCHIVE_MAP,
         XLM_ROBERTA_PRETRAINED_MODEL_ARCHIVE_MAP,
+        DOMBERT_PRETRAINED_MODEL_ARCHIVE_MAP,
     ]
     for key, value, in pretrained_map.items()
 )
@@ -139,6 +148,7 @@ MODEL_MAPPING = OrderedDict(
         (XLNetConfig, XLNetModel),
         (XLMConfig, XLMModel),
         (CTRLConfig, CTRLModel),
+        (DomBertConfig, DomBertModel),
     ]
 )
 
@@ -170,6 +180,7 @@ MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING = OrderedDict(
         (BertConfig, BertForSequenceClassification),
         (XLNetConfig, XLNetForSequenceClassification),
         (XLMConfig, XLMForSequenceClassification),
+        (DomBertConfig, DomBertForSequenceClassification),
     ]
 )
 
@@ -191,6 +202,7 @@ MODEL_FOR_TOKEN_CLASSIFICATION_MAPPING = OrderedDict(
         (RobertaConfig, RobertaForTokenClassification),
         (BertConfig, BertForTokenClassification),
         (XLNetConfig, XLNetForTokenClassification),
+        (DomBertConfig, DomBertForTokenClassification),
     ]
 )
 
