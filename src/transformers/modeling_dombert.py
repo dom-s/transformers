@@ -164,8 +164,12 @@ class DomBertEmbeddings(nn.Module):
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
+        # DOMBERT PARAMETERS
         self.domain_embeddings = None
         self.W = None
+        if config.domain_embedding_path is not None:
+            self.init_domain_embeddings(config.domain_embedding_path)
+
         self._lambda = config.lambda_parameter
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
