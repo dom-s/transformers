@@ -159,7 +159,10 @@ if is_torch_available():
         DomBertPreTrainedModel,
         DomBertModel,
         DomBertForSequenceClassification,
-        DomBertForTokenClassification
+        DomBertForTokenClassification,
+        DomBertModelVarLambda,
+        DomBertVarLambdaForSequenceClassification,
+        DomBertVarLambdaForTokenClassification
     )
 
     from .modeling_openai import (
