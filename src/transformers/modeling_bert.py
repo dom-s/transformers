@@ -201,14 +201,15 @@ class BertEmbeddings(nn.Module):
 class DomBertEmbeddings(nn.Module):
     """Construct the embeddings from word, position and token_type embeddings.
     """
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super().__init__()
+        self._parse_args(**kwargs)
+
         self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=0)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
-        # TODO: add path to embdding file to config
-        wv = gensim.models.KeyedVectors.load_word2vec_format(
-            '/home/dseyler2/git/security-crawler/data/models/word_vectors_300d.bin', binary=True)
+
+        wv = gensim.models.KeyedVectors.load_word2vec_format(self.domain_embedding_path, binary=True)
         domain_embedding_hidden_size = wv.vectors.shape[1]
         wv.add(['[CLS]', '[SEP]', '[UNK]'], [np.zeros(domain_embedding_hidden_size),
                                     np.zeros(domain_embedding_hidden_size),
@@ -216,13 +217,25 @@ class DomBertEmbeddings(nn.Module):
         self.domain_embeddings = nn.Embedding.from_pretrained(torch.FloatTensor(wv.vectors), freeze=True)
         self.W = nn.Linear(self.domain_embeddings.embedding_dim, self.word_embeddings.embedding_dim,
                            bias=False)
-        self._lambda = nn.Embedding(self.domain_embeddings.num_embeddings, 1)
-        self.sigmoid = nn.Sigmoid()
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def _parse_args(self, **kwargs):
+        if 'domain_embedding_path' not in kwargs:
+            raise ValueError('path to domain embeddings is not provided.')
+        self.domain_embedding_path = kwargs['domain_embedding_path']
+
+        if 'lambda_mode' not in kwargs:
+            raise ValueError('lambda mode is not specified.')
+        self.lambda_mode = kwargs['lambda_mode']
+
+        if kwargs['lambda_mode'] in ['add', 'interpolate']:
+            if 'lambda_parameter' not in kwargs:
+                raise ValueError('lambda parameter is not specified.')
+            self.lambda_parameter = kwargs['lambda_parameter']
 
     def forward(self, input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None, domain_input_ids=None):
         if input_ids is not None:
@@ -243,8 +256,16 @@ class DomBertEmbeddings(nn.Module):
         position_embeddings = self.position_embeddings(position_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
         domain_embeddings = self.domain_embeddings(domain_input_ids)
-        _lambdas = self.sigmoid(self._lambda(domain_input_ids))
-        rectified_embeddings = inputs_embeds + self.W(domain_embeddings)
+
+        if self.lambda_mode == 'interpolate':
+            rectified_embeddings = (1-self.lambda_parameter) * inputs_embeds + \
+                                   self.lambda_parameter * self.W(domain_embeddings)
+        elif self.lambda_mode == 'add':
+            rectified_embeddings = inputs_embeds + self.lambda_parameter * self.W(domain_embeddings)
+        elif self.lambda_mode == 'none':
+            rectified_embeddings = inputs_embeds + self.W(domain_embeddings)
+        else:
+            raise ValueError('provided lambda mode not implemented: "{}"'.format(self.lambda_mode))
 
         embeddings = rectified_embeddings + position_embeddings + token_type_embeddings
         embeddings = self.LayerNorm(embeddings)
@@ -603,6 +624,30 @@ class BertPreTrainedModel(PreTrainedModel):
             module.bias.data.zero_()
 
 
+class DomBertPreTrainedModel(PreTrainedModel):
+    """ An abstract class to handle weights initialization and
+        a simple interface for downloading and loading pretrained models.
+    """
+
+    config_class = BertConfig
+    pretrained_model_archive_map = BERT_PRETRAINED_MODEL_ARCHIVE_MAP
+    load_tf_weights = load_tf_weights_in_bert
+    base_model_prefix = "bert"
+
+    def _init_weights(self, module):
+        """ Initialize the weights """
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            if not (isinstance(module, nn.Embedding) and module.weight.requires_grad is False):
+                # Slightly different from the TF version which uses truncated_normal for initialization
+                # cf https://github.com/pytorch/pytorch/pull/5617
+                module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+        elif isinstance(module, BertLayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+        if isinstance(module, nn.Linear) and module.bias is not None:
+            module.bias.data.zero_()
+
+
 BERT_START_DOCSTRING = r"""
     This model is a PyTorch `torch.nn.Module <https://pytorch.org/docs/stable/nn.html#torch.nn.Module>`_ sub-class.
     Use it as a regular PyTorch Module and refer to the PyTorch documentation for all matter related to general
@@ -876,7 +921,7 @@ class BertModel(BertPreTrainedModel):
     a `next sentence prediction (classification)` head. """,
     BERT_START_DOCSTRING,
 )
-class DomBertModel(BertPreTrainedModel):
+class DomBertModel(DomBertPreTrainedModel):
     r"""
     Outputs: `Tuple` comprising various elements depending on the configuration (config) and inputs:
         **last_hidden_state**: ``torch.FloatTensor`` of shape ``(batch_size, sequence_length, hidden_size)``
@@ -905,22 +950,22 @@ class DomBertModel(BertPreTrainedModel):
         last_hidden_states = outputs[0]  # The last hidden-state is the first element of the output tuple
 
     """
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super().__init__(config)
         self.config = config
 
-        self.embeddings = DomBertEmbeddings(config)
+        self.embeddings = DomBertEmbeddings(config, **kwargs)
         self.encoder = BertEncoder(config)
         self.pooler = BertPooler(config)
 
         self.init_weights()
 
-    def get_input_embeddings(self):
-        return self.embeddings.word_embeddings
-
-    def set_input_embeddings(self, value):
-        self.embeddings.word_embeddings = value
-
+    # def get_input_embeddings(self):
+    #     return self.embeddings.word_embeddings
+    #
+    # def set_input_embeddings(self, value):
+    #     self.embeddings.word_embeddings = value
+    #
     def _prune_heads(self, heads_to_prune):
         """ Prunes heads of the model.
             heads_to_prune: dict of {layer_num: list of heads to prune in this layer}
@@ -1456,11 +1501,11 @@ class DomBertForSequenceClassification(BertPreTrainedModel):
         loss, logits = outputs[:2]
 
     """
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super(DomBertForSequenceClassification, self).__init__(config)
         self.num_labels = config.num_labels
 
-        self.bert = DomBertModel(config)
+        self.bert = DomBertModel(config, **kwargs)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, self.config.num_labels)
 
@@ -1726,11 +1771,11 @@ class DomBertForTokenClassification(BertPreTrainedModel):
         loss, scores = outputs[:2]
 
     """
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super(DomBertForTokenClassification, self).__init__(config)
         self.num_labels = config.num_labels
 
-        self.bert = DomBertModel(config)
+        self.bert = DomBertModel(config, **kwargs)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 

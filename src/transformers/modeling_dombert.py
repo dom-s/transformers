@@ -165,10 +165,7 @@ class DomBertEmbeddings(nn.Module):
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
         # DOMBERT PARAMETERS
-        self.domain_embeddings = None
-        self.W = None
-        if config.domain_embedding_path is not None:
-            self.init_domain_embeddings(config.domain_embedding_path)
+        self.init_domain_embeddings(config.domain_embedding_path)
 
         self._lambda = config.lambda_parameter
         self.lambda_mode = config.lambda_mode
@@ -624,15 +621,15 @@ class DomBertPreTrainedModel(PreTrainedModel):
     def _init_weights(self, module):
         """ Initialize the weights """
         if isinstance(module, (nn.Linear, nn.Embedding)):
-            # Slightly different from the TF version which uses truncated_normal for initialization
-            # cf https://github.com/pytorch/pytorch/pull/5617
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            if not (isinstance(module, nn.Embedding) and module.weight.requires_grad is False):
+                # Slightly different from the TF version which uses truncated_normal for initialization
+                # cf https://github.com/pytorch/pytorch/pull/5617
+                module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
         elif isinstance(module, BertLayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
-
 
 BERT_START_DOCSTRING = r"""
     This model is a PyTorch `torch.nn.Module <https://pytorch.org/docs/stable/nn.html#torch.nn.Module>`_ sub-class.
