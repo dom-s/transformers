@@ -171,6 +171,8 @@ class DomBertEmbeddings(nn.Module):
             self.init_domain_embeddings(config.domain_embedding_path)
 
         self._lambda = config.lambda_parameter
+        self.lambda_mode = config.lambda_mode
+        self.scale_embeddings = config.scale_embeddings
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
@@ -206,7 +208,15 @@ class DomBertEmbeddings(nn.Module):
         position_embeddings = self.position_embeddings(position_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
         domain_embeddings = self.domain_embeddings(domain_input_ids)
-        rectified_embeddings = (1-self._lambda) * inputs_embeds + self._lambda * self.W(domain_embeddings)
+        if self.lambda_mode == 'interpolate':
+            rectified_embeddings = (1-self._lambda) * inputs_embeds + self._lambda * self.W(domain_embeddings)
+        elif self.lambda_mode == 'add':
+            rectified_embeddings = inputs_embeds + self._lambda * self.W(domain_embeddings)
+        elif self.lambda_mode == 'none':
+            rectified_embeddings = inputs_embeds + self.W(domain_embeddings)
+        else:
+            raise ValueError('provided lambda mode not implemented: "{}"'.format(self.lambda_mode))
+        rectified_embeddings *= self.scale_embeddings
 
         embeddings = rectified_embeddings + position_embeddings + token_type_embeddings
         embeddings = self.LayerNorm(embeddings)

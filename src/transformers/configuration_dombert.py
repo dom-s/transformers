@@ -124,7 +124,9 @@ class DomBertConfig(PretrainedConfig):
         initializer_range=0.02,
         layer_norm_eps=1e-12,
         domain_embedding_path=None,
-        lambda_parameter=0.5,
+        lambda_parameter=None,
+        lambda_mode=None,
+        scale_embeddings=None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -143,3 +145,5 @@ class DomBertConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.domain_embedding_path = domain_embedding_path
         self.lambda_parameter = lambda_parameter
+        self.scale_embeddings = scale_embeddings
+        self.lambda_mode = lambda_mode
