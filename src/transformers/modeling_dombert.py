@@ -157,34 +157,48 @@ ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu, "swish": swish, "gelu_
 BertLayerNorm = torch.nn.LayerNorm
 
 
+class DomainEmbedding(nn.Module):
+    def __init__(self, domain_embedding_path, freeze_domain_embeddings):
+        super().__init__()
+
+        wv = gensim.models.KeyedVectors.load_word2vec_format(domain_embedding_path, binary=True)
+        domain_embedding_hidden_size = wv.vectors.shape[1]
+        wv.add(['[CLS]', '[SEP]', '[UNK]'], [np.zeros(domain_embedding_hidden_size),
+                                             np.zeros(domain_embedding_hidden_size),
+                                             np.zeros(domain_embedding_hidden_size)])
+        self.add_module('embedding',
+                        nn.Embedding.from_pretrained(torch.FloatTensor(wv.vectors), freeze=freeze_domain_embeddings))
+
+    def forward(self, domain_input_ids):
+        return self.embedding(domain_input_ids)
+
+
 class DomBertEmbeddings(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=0)
-        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
-        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
-
-        # DOMBERT PARAMETERS
-        self.init_domain_embeddings(config.domain_embedding_path)
 
         self._lambda = config.lambda_parameter
         self.lambda_mode = config.lambda_mode
         self.scale_embeddings = config.scale_embeddings
+        self.freeze_domain_embeddings = config.freeze_domain_embeddings
+        self.freeze_bert_embeddings = config.freeze_bert_embeddings
+
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=0)
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+
+        if self.freeze_bert_embeddings:
+            self.word_embeddings.weight.requires_grad = False
+
+        self.domain_embeddings = DomainEmbedding(config.domain_embedding_path, self.freeze_domain_embeddings)
+        self.W = nn.Linear(self.domain_embeddings.embedding.embedding_dim, self.word_embeddings.embedding_dim,
+                           bias=False)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def init_domain_embeddings(self, domain_embedding_path):
-        wv = gensim.models.KeyedVectors.load_word2vec_format(domain_embedding_path, binary=True)
-        domain_embedding_hidden_size = wv.vectors.shape[1]
-        wv.add(['[CLS]', '[SEP]', '[UNK]'], [np.zeros(domain_embedding_hidden_size),
-                                             np.zeros(domain_embedding_hidden_size),
-                                             np.zeros(domain_embedding_hidden_size)])
-        self.domain_embeddings = nn.Embedding.from_pretrained(torch.FloatTensor(wv.vectors), freeze=True)
-        self.W = nn.Linear(self.domain_embeddings.embedding_dim, self.word_embeddings.embedding_dim,
-                           bias=False)
 
     def forward(self, input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None, domain_input_ids=None):
         if input_ids is not None:
@@ -621,15 +635,24 @@ class DomBertPreTrainedModel(PreTrainedModel):
     def _init_weights(self, module):
         """ Initialize the weights """
         if isinstance(module, (nn.Linear, nn.Embedding)):
-            if not (isinstance(module, nn.Embedding) and module.weight.requires_grad is False):
-                # Slightly different from the TF version which uses truncated_normal for initialization
-                # cf https://github.com/pytorch/pytorch/pull/5617
-                module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
         elif isinstance(module, BertLayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
+
+    def apply(self, fn):
+        for module in self.children():
+            # don't initialize weights when module is DombertEmbedding
+            if not isinstance(module, (DomBertEmbeddings, DomBertEmbeddingsVarLambda)):
+                module.apply(fn)
+        fn(self)
+        return self
+
+
 
 BERT_START_DOCSTRING = r"""
     This model is a PyTorch `torch.nn.Module <https://pytorch.org/docs/stable/nn.html#torch.nn.Module>`_ sub-class.
