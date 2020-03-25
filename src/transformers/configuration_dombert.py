@@ -129,6 +129,7 @@ class DomBertConfig(PretrainedConfig):
         scale_embeddings=None,
         freeze_domain_embeddings=None,
         freeze_bert_embeddings=None,
+        w_add_bias=None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -151,3 +152,4 @@ class DomBertConfig(PretrainedConfig):
         self.lambda_mode = lambda_mode
         self.freeze_domain_embeddings = freeze_domain_embeddings
         self.freeze_bert_embeddings = freeze_bert_embeddings
+        self.w_add_bias = w_add_bias

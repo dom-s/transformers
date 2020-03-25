@@ -192,7 +192,7 @@ class DomBertEmbeddings(nn.Module):
 
         self.domain_embeddings = DomainEmbedding(config.domain_embedding_path, self.freeze_domain_embeddings)
         self.W = nn.Linear(self.domain_embeddings.embedding.embedding_dim, self.word_embeddings.embedding_dim,
-                           bias=False)
+                           bias=config.w_add_bias)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
