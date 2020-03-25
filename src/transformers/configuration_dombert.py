@@ -126,7 +126,7 @@ class DomBertConfig(PretrainedConfig):
         domain_embedding_path=None,
         lambda_parameter=None,
         lambda_mode=None,
-        scale_embeddings=None,
+        scale_embeddings=1.0,
         freeze_domain_embeddings=None,
         freeze_bert_embeddings=None,
         w_add_bias=None,
